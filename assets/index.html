@@ -1,24 +1,278 @@
+<!DOCTYPE html>
 <html>  
     <head>
         <meta charset="utf-8"/>
+        <style>
+            #tests {
+              font-family: Arial, Helvetica, sans-serif;
+              border-collapse: collapse;
+              width: 50%;
+            }
+
+            #tests td, #tests th {
+              border: 1px solid #ddd;
+              padding: 8px;
+            }
+
+            #tests tr:nth-child(even){background-color: #f2f2f2;}
+            #tests tr:hover {background-color: #ddd;}
+
+            #tests th {
+              padding-top: 12px;
+              padding-bottom: 12px;
+              text-align: left;
+              background-color: #4CAF50;
+              color: white;
+            }
+        </style>
+        <script src="main.js"></script>
+        <script src="wasm_exec_c.js"></script>
         <script src="wasm_exec.js"></script>
+        <script src="wasm_exec_tiny.js"></script>
         <script>
             const go = new Go();
-            WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+            WebAssembly.instantiateStreaming(fetch("go.wasm"), go.importObject).then((result) => {
                 go.run(result.instance);
             });
+
+            const tinyGo = new TinyGo();
+            fetch("tiny_go.wasm").then(resp => resp.arrayBuffer()).then(bytes =>
+		        WebAssembly.instantiate(bytes, tinyGo.importObject).then(function (obj) {
+			        window.wasm = obj.instance;
+			        tinyGo.run(window.wasm);
+            }))
         </script>
+
+        <title>
+            WebAssembly x JavaScript
+        </title>
     </head>
     <body>
-        <h1>WebAssembly in Go</h1>
-        <h2 id="out">Out: </h2>
-        <input id="x" name="x" type="number" />
-        <input id="button" type="submit" name="button" value="Square" onclick="squareWasm(x.value)"/>
-        <input id="output" name="output" />
+        <h1>WebAssembly Benchmark</h1>
+
+        <section id="section_fibonacci">
+
+            <div>
+                <p>
+                    This test executes the Fibonacci algorithm with 4 different ways:
+                    JavaScript, Go, TinyGo, and C
+                    <br />
+                    Insert the number you want to find.
+                    It will execute the calculation 5 times and take the average.
+                </p>
+            </div>
+            
+            <div>
+                <p>
+                    <input type="number" id="number" style="margin-right: 10px";/>
+                    <button id="run_button" onclick="start()">Run</button>
+                    <label id="status" style="margin-left: 20px;"></label>
+                </p>
+                <p>
+                    
+                </p>
+                <p>
+                    <table id="tests">
+                        <tr>
+                            <th>Language</th>
+                            <th>Time (ms)</th>
+                        </tr>
+    
+                        <tbody>
+                            <tr>
+                                <td>JavaScript</td>
+                                <td>
+                                    <span id="js_performance"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Go</td>
+                                <td>
+                                    <span id="go_performance"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>TinyGo</td>
+                                <td>
+                                    <span id="tinygo_performance"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>C</td>
+                                <td>
+                                    <span id="c_performance"></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </p>
+            </div>
+        </section>
+
+        <hr>
+
+        <section id="section_prime">
+
+            <div>
+                <p>
+                    This test executes a function to find a prime number with 4 different ways:
+                    JavaScript, Go, TinyGo, and C
+                    <br />
+                    Insert the number you want to find.
+                    It will execute the calculation 5 times and take the average.
+                </p>
+            </div>
+            
+            <div>
+                <p>
+                    <input type="number" id="number_prime" style="margin-right: 10px";/>
+                    <button id="run_button_prime" onclick="start_prime()">Run</button>
+                    <label id="status_prime" style="margin-left: 20px;"></label>
+                </p>
+                <p>
+                    
+                </p>
+                <p>
+                    <table id="tests">
+                        <tr>
+                            <th>Language</th>
+                            <th>Time (ms)</th>
+                        </tr>
+    
+                        <tbody>
+                            <tr>
+                                <td>JavaScript</td>
+                                <td>
+                                    <span id="js_performance_prime"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Go</td>
+                                <td>
+                                    <span id="go_performance_prime"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>TinyGo</td>
+                                <td>
+                                    <span id="tinygo_performance_prime"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>C</td>
+                                <td>
+                                    <span id="c_performance_prime"></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </p>
+            </div>
+        </section>
    </body>
    <script>
-       var squareWasm = function(input) {
-            output.value = square(input)
+        function init() {
+            document.getElementById('status').textContent = ``
+            document.getElementById('run_button').disabled = true;
+            document.getElementById('number').disabled = true;
+        }
+        
+        function finish() {
+            document.getElementById('status').textContent = `Done`
+            document.getElementById('run_button').disabled = false;
+            document.getElementById('number').disabled = false;
+        }
+
+        function init_prime() {
+            document.getElementById('status_prime').textContent = ``
+            document.getElementById('run_button_prime').disabled = true;
+            document.getElementById('number_prime').disabled = true;
+        }
+
+        function finish_prime() {
+            document.getElementById('status_prime').textContent = `Done`
+            document.getElementById('run_button_prime').disabled = false;
+            document.getElementById('number_prime').disabled = false;
+        }
+
+
+        function run_test(func, n, loop=5) {
+            return new Promise((resolve, reject) => {
+                console.log('Running test with n as ', n)
+                var ret = func(n);
+                console.log('value:', ret);
+                var elapsedTime = 0.0;
+                for (var i = 0; i < loop; i++) {
+                    var startTime = performance.now();
+                    func(n);
+                    var endTime = performance.now();
+                    elapsedTime += (endTime - startTime);
+                    console.log(i, elapsedTime);
+                }
+                resolve((elapsedTime / loop).toFixed(6)) 
+            });
+        }
+
+        function executeTest(arr, index, n) {
+            if (index >= arr.length) {
+                finish();
+                return;
+            }
+
+            const test = arr[index];
+            document.getElementById('status').textContent = `Running ${test.name}...`
+            setTimeout(async () => {
+                const ret = await run_test(test.func, n);
+                document.getElementById(test.elem).textContent = ret;
+                setTimeout(() => executeTest(arr, index+1, n))
+            })
+        }
+        
+        function start() {
+            console.log('Starting benchmark test')
+            const availableTests = [
+                {elem: 'js_performance', func: jsFibonacci, name: 'JavaScript'},
+                {elem: 'go_performance', func: window.wsFibonacci, name: 'Go'},
+                {elem: 'tinygo_performance', func: wasm.exports.wsTinyFibonacci, name: 'TinyGo'},
+                {elem: 'c_performance', func: Module._fibonacci, name: 'C'}
+            ]
+            init();
+
+            availableTests.forEach(el => document.getElementById(el.elem).textContent = '');
+            const inputNumber = document.getElementById('number').value;
+            const n = Math.floor(parseFloat(inputNumber));
+            setTimeout(() => executeTest(availableTests, 0, n));
+       }
+
+       function executeTestPrime(arr, index, n) {
+            if (index >= arr.length) {
+                finish_prime();
+                return;
+            }
+
+            const test = arr[index];
+            document.getElementById('status_prime').textContent = `Running ${test.name}...`
+            setTimeout(async () => {
+                const ret = await run_test(test.func, n);
+                document.getElementById(test.elem).textContent = ret;
+                setTimeout(() => executeTestPrime(arr, index+1, n))
+            })
+        }
+
+       function start_prime() {
+            console.log('Starting benchmark test: prime function')
+            const availablePrimeTests = [
+                {elem: 'js_performance_prime', func: jsIsPrime, name: 'JavaScript'},
+                {elem: 'go_performance_prime', func: window.wsPrime, name: 'Go'},
+                {elem: 'tinygo_performance_prime', func: wasm.exports.wsTinyIsPrime, name: 'TinyGo'},
+                {elem: 'c_performance_prime', func: Module._isPrime, name: 'C'}
+            ]
+            init_prime();
+
+            availablePrimeTests.forEach(el => document.getElementById(el.elem).textContent = '');
+            const inputNumber = document.getElementById('number_prime').value;
+            const n = Math.floor(parseFloat(inputNumber));
+            setTimeout(() => executeTestPrime(availablePrimeTests, 0, n));
        }
     </script>
 </html>  
